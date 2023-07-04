@@ -108,7 +108,7 @@ There are three Cloud Computing Service Models:
   - Users: Root User, IAM User, Federating existing user
   - IAM Group
   - IAM Role / Temporary security credentials
-- Policies and permissions ([More details](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html))
+- Policies and permissions
 
 ### Root User
 **Login with:**
@@ -156,8 +156,8 @@ There are three Cloud Computing Service Models:
 - A user can belong to many groups
 
 **Best Practices:**
-  - Each user in the group usually has the same policy
-  - Ex: project, department, position, ...
+- Each user in the group usually has the same policy
+- Ex: project, department, position, ...
 
 <img src="resources/images/03_iam_group.png" alt="IAM group"></a>
 
@@ -219,13 +219,22 @@ There are three Cloud Computing Service Models:
 
 - [More example](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_examples.html)
 
-**Policy types**
+**Policy types ([More details](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html))**
 - Identity-based policies: Attach managed and inline policies to IAM identities
 - Resource-based policies: Attach inline policies to resources
 - Permissions boundaries: the permissions boundary for an IAM entity
 - Organizations SCPs: define the maximum permissions for account members of an organization or organizational unit (OU)
-- Access control lists (ACLs)
-- Session policies
+- Access control lists (ACLs): control which principals in another account can access a resource. They are the only policy type that does not use the JSON policy document structure.
+- Session policies: limit the permissions that the role or user's identity-based policies grant to the session.
+
+**Identity-base policies type:**
+- Managed policies: Standalone policies that you can attach to multiple IAM identities in your AWS account. There are two types of managed policies:
+  - AWS managed policies: Managed policies that are created and managed by AWS.
+  - Customer managed policies: Managed policies that you create and manage in your AWS account.
+- Inline policies: Policies that you add directly to a single user, group, or role.
+  - A one-to-one relationship between a policy and an identity.
+  - They are deleted when you delete the identity.
+
 
 
 ## 3️⃣ Organization Service
@@ -319,3 +328,9 @@ arn:partition:service:region:account-id:resource-type/resource-id
 arn:partition:service:region:account-id:resource-type:resource-id
 ```
 - Standalone policy: the policy has its own Amazon Resource Name (ARN) that includes the policy name. For example, `arn:aws:iam::aws:policy/IAMReadOnlyAccess` is an AWS managed policy.
+- IAM Resources: The user, group, role, policy, and identity provider objects that are stored in IAM. As with other AWS services, you can add, edit, and remove resources from IAM.
+- IAM Identities: The IAM resource objects that are used to identify and group. You can attach a policy to an IAM identity. These include users, groups, and roles.
+- IAM Entities: The IAM resource objects that AWS uses for authentication. These include IAM users and roles.
+- Human users: Also known as human identities; the people, administrators, developers, operators, and consumers of your applications.
+- Workload: A collection of resources and code that delivers business value, such as an application or backend process. Can include applications, operational tools, and components.
+- Principal: is a human user or workload that can make a request for an action or operation on an AWS resource.
