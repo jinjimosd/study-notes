@@ -53,8 +53,11 @@ GitOps is a way of managing your infrastructure and applications that:
 
 ### Sources
 A Source defines the origin of a repository containing the desired state of the system and the requirements to obtain it.
+
 Sources produce an artifact that is consumed by other Flux components to perform actions, like applying the contents of the artifact on the cluster.
- A source may be shared by multiple consumers to deduplicate configuration.
+
+A source may be shared by multiple consumers to deduplicate configuration.
+
 The origin of the source is checked for changes on a defined interval, if there is a newer version available that matches the criteria, a new artifact is produced.
 
 <img height=500px src="resources/images/3_source-controller.png" alt="source-controller"></a>
