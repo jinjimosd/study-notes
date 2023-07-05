@@ -31,6 +31,11 @@ This is a self-study document about flux cd.<br>
   - [Watch Flux sync the application](#watch-flux-sync-the-application)
   - [Suspend updates](#suspend-updates)
   - [Customize podinfo deployment](#customize-podinfo-deployment)
+- [5️⃣ Ways of structuring your repositories](#5️⃣-ways-of-structuring-your-repositories)
+  - [Monorepo](#monorepo)
+  - [Repo per environment](#repo-per-environment)
+  - [Repo per team](#repo-per-team)
+  - [Repo per app](#repo-per-app)
 - [🔎 Glossary](#-glossary)
 
 ## 1️⃣ Introduction
@@ -247,6 +252,190 @@ git add -A && git commit -m "Increase podinfo minimum replicas"
 git push
 ```
 - After the synchronization finishes, running kubectl get pods should display 3 pods.
+
+## 5️⃣ Ways of structuring your repositories
+### Monorepo
+In a monorepo approach you would store all your Kubernetes manifests in a single Git repository.
+
+The various environments specific configs are all stored in the same branch (e.g. `main`).
+
+Repository structure:
+- Example structure:
+```
+├── apps
+│   ├── base
+│   ├── production 
+│   └── staging
+├── infrastructure
+│   ├── base
+│   ├── production 
+│   └── staging
+└── clusters
+    ├── production
+    └── staging
+```
+- Each cluster state is defined in a dedicated dir e.g. `clusters/production` where the specific apps and infrastructure overlays are referenced.
+- The separation between apps and infrastructure makes it possible to define the order in which a cluster is reconciled, e.g. first the cluster addons and other Kubernetes controllers, then the applications.
+- A complete example of this approach can be found at [flux2-kustomize-helm-example](https://github.com/fluxcd/flux2-kustomize-helm-example).
+
+Delivery management:
+- In trunk-based development, the changes are made in small batches and are merged into the main branch often.
+- New app release can be automatically delivered to staging using Flux’s image updates to Git.
+- For production, you may choose to manually approve app version bumps by configuring Flux to push the changes to a new branch from which you can create a pull request. You can limit the impact of an issue that escaped staging testing by using Flagger’s canary releases.
+- Changes to infrastructure can be made in steps, first you merge a change to staging, when the cluster is successfully reconciled, and the new cluster state passes conformance tests, you then promote the change to production.
+
+### Repo per environment
+This approach is similar to the monorepo, with some notable differences:
+- In the monorepo approach, all team members can read the production config since Git is not designed to restrict access to certain files in a repository. Having a separate repository for production means that you can grant access to a subset of team members while allowing everyone to clone staging and open pull requests.
+- Promoting changes from one environment to another can be more time-consuming especially for infrastructure changes that can’t be automated with Flux image updates.
+
+### Repo per team 
+Assuming your organization has a dedicated platform admin team that provides Kubernetes as-a-service for other teams.
+
+The platform admin team is responsible for:
+- Setting up the staging and production environments.
+- Maintains the cluster addon-ons and other cluster-wide resources (CRDs, controllers, admission webhooks, etc).
+- Onboards the dev teams repositories using Flux’s `GitRepository` custom resources.
+- Configures how the dev teams repositories are reconciled on each cluster using Flux’s `Kustomization` custom resources.
+
+The dev teams are responsible for:
+- Setting up the apps definitions (Kubernetes deployments, Helm releases).
+- Configures how the apps are reconciled on each environment (Kustomize overlays, Helm values).
+- Manages the apps promotion between environments using Flux’s automated image updates to Git.
+
+Repository structure:
+- Platform admin repository example (kustomize overlays):
+```
+├── teams
+│   ├── team1
+│   ├── team2
+├── infrastructure
+│   ├── base
+│   ├── production 
+│   └── staging
+└── clusters
+    ├── production
+    └── staging
+```
+- Dev team repository example (kustomize overlays):
+```
+└── apps
+    ├── base
+    ├── production 
+    └── staging
+```
+- A complete example of this approach can be found at [flux2-multi-tenancy](https://github.com/fluxcd/flux2-multi-tenancy).
+
+Delivery:
+- The delivery process is similar to the monorepo one. 
+- The main difference is the separation of concerns, the platform admin team handles the change management of the infrastructure, but delegates the apps delivery to the dev teams.
+
+### Repo per app
+It is common to use the same repository to store both the application source code and its deployment manifests.
+
+Instead of duplicating the deployment manifests between the app repo and the cluster(s) config repo, the config repo can hold a pointer to the app manifests.
+
+Inside the config repo you can define a `GitRepository` that tells Flux to clone the app repo inside the cluster, then with a `Kustomization`, you can tell Flux which directory holds the app manifests and how to patch them based on the target environment.
+
+Another option is to bundle the app manifests into a Helm chart and publish it to a Helm repository. In the config repo you can define the `HelmRepository` and create an app `HelmRelease` for each target environment.
+
+Repository structure:
+- App repository plain Kubernetes manifests example:
+```
+├── src
+└── deploy
+    └── manifests
+```
+- Delivery example (stored in config repo):
+```
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: app
+spec:
+  url: https://<host>/<org>/app
+  ref:
+    semver: "1.x"
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: app
+spec:
+  sourceRef:
+    kind: GitRepository
+    name: app
+  path: ./deploy/manifests
+  patchesStrategicMerge:
+    - apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: app
+      spec:
+        replicas: 2
+```
+- App repository Kustomize overlays example:
+```
+├── src
+└── deploy
+    ├── base
+    ├── production 
+    └── staging
+```
+- Delivery example (stored in config repo):
+```
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: app
+spec:
+  url: https://<host>/<org>/app
+  ref:
+    branch: main
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: app
+spec:
+  sourceRef:
+    kind: GitRepository
+    name: app
+  path: ./deploy/production
+```
+- App repository Helm chart example:
+```
+├── src
+└── chart
+    ├── templates
+    ├── values.yaml 
+    └── values-prod.yaml
+```
+- Delivery example (stored in config repo):
+```
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: apps
+spec:
+  url: https://<host>/<org>/charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: app
+spec:
+  chart:
+    spec:
+      chart: app
+      version: "1.x"
+      sourceRef:
+        kind: HelmRepository
+        name: apps
+  values:
+    replicas: 2
+```
+
 
 ## 🔎 Glossary 
 - OCI artifacts: OCI artifacts are any arbitrary files related to a software application. A common use case for OCI artifacts is Helm charts.
