@@ -259,8 +259,7 @@ In a monorepo approach you would store all your Kubernetes manifests in a single
 
 The various environments specific configs are all stored in the same branch (e.g. `main`).
 
-Repository structure:
-- Example structure:
+Example repository structure:
 ```
 ├── apps
 │   ├── base
@@ -274,8 +273,6 @@ Repository structure:
     ├── production
     └── staging
 ```
-- Each cluster state is defined in a dedicated dir e.g. `clusters/production` where the specific apps and infrastructure overlays are referenced.
-- The separation between apps and infrastructure makes it possible to define the order in which a cluster is reconciled, e.g. first the cluster addons and other Kubernetes controllers, then the applications.
 - A complete example of this approach can be found at [flux2-kustomize-helm-example](https://github.com/fluxcd/flux2-kustomize-helm-example).
 
 Delivery management:
@@ -333,7 +330,7 @@ Delivery:
 ### Repo per app
 It is common to use the same repository to store both the application source code and its deployment manifests.
 
-Instead of duplicating the deployment manifests between the app repo and the cluster(s) config repo, the config repo can hold a pointer to the app manifests.
+The config repo can hold a pointer to the app manifests.
 
 Inside the config repo you can define a `GitRepository` that tells Flux to clone the app repo inside the cluster, then with a `Kustomization`, you can tell Flux which directory holds the app manifests and how to patch them based on the target environment.
 
