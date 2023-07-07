@@ -23,6 +23,7 @@ This is a self-study document about flux cd.<br>
   - [Progressive Delivery](#progressive-delivery)
 - [4️⃣ Quick start in local env](#4️⃣-quick-start-in-local-env)
   - [Install kubernetes](#install-kubernetes)
+  - [Install kustomize](#install-kustomize)
   - [Create GitLab personal access token](#create-gitlab-personal-access-token)
   - [Run flux bootstrap](#run-flux-bootstrap)
   - [Clone the git repository](#clone-the-git-repository)
@@ -36,7 +37,18 @@ This is a self-study document about flux cd.<br>
   - [Repo per environment](#repo-per-environment)
   - [Repo per team](#repo-per-team)
   - [Repo per app](#repo-per-app)
-- [🔎 Glossary](#-glossary)
+- [6️⃣ Define a chart source](#6️⃣-define-a-chart-source)
+  - [Helm repository:](#helm-repository)
+  - [Helm HTTP/S repository:](#helm-https-repository)
+  - [Helm OCI repository:](#helm-oci-repository)
+  - [Helm repository authentication with credentials:](#helm-repository-authentication-with-credentials)
+  - [Git repository](#git-repository)
+  - [Cloud Storage](#cloud-storage)
+- [7️⃣ Define a Helm release](#7️⃣-define-a-helm-release)
+- [8️⃣ Refer to values in ConfigMap and Secret resources](#8️⃣-refer-to-values-in-configmap-and-secret-resources)
+  - [Define ConfigMap and Secret resources](#define-configmap-and-secret-resources)
+  - [Refer to values in ConfigMaps generated with Kustomize](#refer-to-values-in-configmaps-generated-with-kustomize)
+- [🔎 Glossary 1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣ 7️⃣ 8️⃣ 9️⃣ 0️⃣](#-glossary-1️⃣-2️⃣-3️⃣-4️⃣-5️⃣-6️⃣-7️⃣-8️⃣-9️⃣-0️⃣)
 
 ## 1️⃣ Introduction
 Flux is a tool for keeping Kubernetes clusters in sync with sources of configuration (like Git repositories and OCI artifacts), and automating updates to configuration when there is new code to deploy.
@@ -111,11 +123,18 @@ I used Kind to install Kubernetes with 1 master and 2 workers.
 [ $(uname -m) = x86_64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
 chmod +x ./kind
 sudo mv ./kind /usr/local/bin/kind
-kind create cluster --name cluster01 --config resources/kind/cluster-ha-demo.yaml
+kind create cluster --name cluster01 --config resources/kind/cluster-demo.yaml
 kubectl create -f resources/kind/tigera-operator.yaml
 kubectl create -f resources/kind/calico.yaml
 kubectl apply -f resources/kind/nginx-ingress-deploy.yaml
-bash resources/kind/HAProxy.sh
+```
+
+### Install kustomize
+```
+curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"  | bash
+sudo mv kustomize /usr/local/bin/
+echo 'source <(kustomize completion bash)' >>~/.bashrc
+source ~/.bashrc
 ```
 
 ### Create GitLab personal access token
@@ -433,6 +452,202 @@ spec:
     replicas: 2
 ```
 
+## 6️⃣ Define a chart source
+To release a Helm chart, the source that contains the chart (either a `HelmRepository`, `GitRepository`, or `Bucket`), so that the HelmRelease can reference to it.
 
-## 🔎 Glossary 
+A better option is to use an OCI registry for chart storage.
+
+### Helm repository:
+Helm repositories are the recommended source to retrieve Helm charts from.
+
+They can be declared by creating a `HelmRepository` resource.
+
+### Helm HTTP/S repository:
+The `source-controller` will fetch the Helm repository index for this resource on an interval and expose it as an artifact:
+```
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: podinfo
+  namespace: default
+spec:
+  interval: 1m
+  url: https://stefanprodan.github.io/podinfo
+```
+The url can be any HTTP/S Helm repository URL.
+
+### Helm OCI repository:
+The url is a valid OCI registry url
+
+The URL is expected to point to a registry repository and to start with oci://
+```
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: podinfo
+  namespace: default
+spec:
+  type: oci
+  interval: 5m0s
+  url: oci://ghcr.io/stefanprodan/charts
+```
+
+### Helm repository authentication with credentials:
+In order to use a private Helm repository, you may need to provide the credentials.
+
+For HTTP/S repositories, the credentials can be provided as a secret reference with basic authentication.
+```
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: podinfo
+  namespace: default
+spec:
+  interval: 1m
+  url: https://stefanprodan.github.io/podinfo
+  secretRef:
+    name: example-user
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: example-user
+  namespace: default
+stringData:
+  username: example
+  password: 123456
+```
+For OCI repositories, the credentials can be provided alternatively as a secret reference with dockerconfig authentication.
+```
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: podinfo
+  namespace: default
+spec:
+  interval: 5m0s
+  url: oci://ghcr.io/stefanprodan/charts
+  type: "oci"
+  secretRef:
+    name: regcred
+```
+The Docker registry Secret `regcred` can be created with kubectl:
+```
+kubectl create secret docker-registry regcred \
+ --docker-server=ghcr.io \
+ --docker-username=gh-user \
+ --docker-password=gh-token
+```
+
+### Git repository
+The source-controller can build and expose Helm charts as artifacts from the contents of the `GitRepository` artifact.
+```
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: podinfo
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: https://github.com/stefanprodan/podinfo
+  ref:
+    branch: master
+  ignore: |
+    # exclude all
+    /*
+    # include charts directory
+    !/charts/   
+```
+The url can be any HTTP/S or SSH address
+
+### Cloud Storage
+It is inadvisable while still possible to use a `Bucket` as a source for a `HelmRelease`
+
+## 7️⃣ Define a Helm release
+With the chart source created, define a new HelmRelease to release the Helm chart:
+```
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: podinfo
+  namespace: default
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: <name|path>
+      version: '4.0.x'
+      sourceRef:
+        kind: <HelmRepository|GitRepository|Bucket>
+        name: podinfo
+        namespace: flux-system
+      interval: 1m
+  values:
+    replicaCount: 2
+```
+The `chart.spec` values are used to create a new `HelmChart` resource in the same namespace as the sourceRef.
+
+The `chart.spec.chart` can either contain:
+- The name of the chart as made available by the `HelmRepository`, for example: `podinfo`
+- The relative path the chart can be found at in the `GitRepository` or `Bucket`, for example: `./charts/podinfo`
+- The relative path the chart package can be found at in the `GitRepository` or `Bucket`, for example: `./charts/podinfo-1.2.3.tgz`
+
+The `chart.spec.version` can be a fixed semver, or any semver range (i.e. `>=4.0.0 <5.0.0`), only taken into account for HelmRelease resources that reference a HelmRepository source.
+
+## 8️⃣ Refer to values in ConfigMap and Secret resources
+### Define ConfigMap and Secret resources
+- Values defined by `ConfigMap` and `Secret` resources are merged in the order given, with the later values overwriting the earlier ones.
+- These values have a lower priority than the values inlined in the `HelmRelease` via the `spec.values` parameter.
+```
+spec:
+  valuesFrom:
+  - kind: ConfigMap
+    name: prod-env-values
+    valuesKey: values-prod.yaml
+  - kind: Secret
+    name: prod-tls-values
+    valuesKey: crt
+    targetPath: tls.crt
+```
+The definition of the listed keys is as follows:
+
+- `kind`: Kind of the values referent (ConfigMap or Secret).
+- `name`: Name of the values referent, in the same namespace as the HelmRelease.
+- `valuesKey` (Optional): The data key where the values.yaml or a specific value can be found. Defaults to values.yaml when omitted.
+- `targetPath` (Optional): The YAML dot notation path at which the value should be merged. When set, the valuesKey is expected to be a single flat value. Defaults to `None` when omitted, which results in the values getting merged at the root.
+
+### Refer to values in ConfigMaps generated with Kustomize
+It use Kustomize ConfigMap generator to trigger a Helm release upgrade every time the encoded values change.
+
+First create a kustomizeconfig.yaml:
+```
+nameReference:
+- kind: ConfigMap
+  version: v1
+  fieldSpecs:
+  - path: spec/valuesFrom/name
+    kind: HelmRelease
+```
+Create a HelmRelease definition that references a ConfigMap:
+```
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: podinfo
+  namespace: podinfo
+spec:
+  interval: 5m
+  releaseName: podinfo
+  chart:
+    spec:
+      chart: podinfo
+      sourceRef:
+        kind: HelmRepository
+        name: podinfo
+  valuesFrom:
+    - kind: ConfigMap
+      name: podinfo-values
+```
+
+## 🔎 Glossary 1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣ 7️⃣ 8️⃣ 9️⃣ 0️⃣
 - OCI artifacts: OCI artifacts are any arbitrary files related to a software application. A common use case for OCI artifacts is Helm charts.
