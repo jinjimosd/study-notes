@@ -139,8 +139,6 @@ source ~/.bashrc
 
 ### Create GitLab personal access token
 Generate a personal access token that grants complete read/write access to the GitLab API.
-
-<img src="resources/images/4_gitlab-access-token.png" alt="gitlab-access-token"></a>
 ```
 export GITLAB_TOKEN=<your-token>
 ```
@@ -155,11 +153,6 @@ flux bootstrap gitlab \
   --token-auth \
   --personal
 ```
-The bootstrap command above does the following:
-- Creates a git repository fleet-infra on your Gitlab account.
-- Adds Flux component manifests to the repository.
-- Deploys Flux Components to your Kubernetes Cluster.
-- Configures Flux components to track the path /clusters/cluster01 in the repository.
 
 ### Clone the git repository
 Clone the fleet-infra repository to your local machine:
@@ -180,7 +173,6 @@ flux create source git podinfo \
   --interval=30s \
   --export > ./clusters/cluster01/podinfo-source.yaml
 ```
-
 - Commit and push the `podinfo-source.yaml` file to the `fleet-infra` repository:
 ```
 git add -A && git commit -m "Add podinfo GitRepository"
@@ -239,11 +231,6 @@ NAME                 TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)         
 service/kubernetes   ClusterIP   10.96.0.1        <none>        443/TCP             6h51m
 service/podinfo      ClusterIP   10.104.232.239   <none>        9898/TCP,9999/TCP   13m
 ```
-
-Changes made to the podinfo Kubernetes manifests in the master branch are reflected in your cluster.
-- Kubernetes manifest is removed from the podinfo repository => Flux removes it from your cluster.
-- Delete a Kustomization from the fleet-infra repository => Flux removes all Kubernetes objects previously applied from that Kustomization.
-- Edit the podinfo deployment using kubectl edit, the changes are reverted to match the state described in Git.
 
 ### Suspend updates
 - To suspend updates for a kustomization, run the command `flux suspend kustomization <name>`
