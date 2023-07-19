@@ -23,6 +23,7 @@ This is a self-study document to prepare for the AWS SAA-03 exam.<br>
   - [Temporary security credentials](#temporary-security-credentials)
   - [Policies](#policies)
   - [Policy evaluation logic](#policy-evaluation-logic)
+- [**Processing the request context:**](#processing-the-request-context)
 - [3️⃣ Organization Service](#3️⃣-organization-service)
 - [4️⃣ Billing Service](#4️⃣-billing-service)
 - [5️⃣ EC2 Service](#5️⃣-ec2-service)
@@ -246,7 +247,14 @@ There are three Cloud Computing Service Models:
 - Example: Carlos can perform list, read, and write actions on Resource Y, but is denied access to Resource Z.
 
 ### Policy evaluation logic
-
+When principal sends a request to AWS, AWS completes several steps to determine whether to allow or deny the request:
+- Authentication
+- Processing the request context
+- Evaluating policies within a single account
+- Determining whether a request is allowed or denied within an account
+  
+**Processing the request context:**
+- 
 
 
 ## 3️⃣ Organization Service
